@@ -6,6 +6,8 @@ import 'leaflet-draw/dist/leaflet.draw.css';
 import './App.css';
 
 const SPB_BOUNDS = [[59.4000, 29.5000], [60.5000, 31.5000]];
+// Создадим константу для адреса, чтобы менять в одном месте
+const API_URL = 'https://renovspb.onrender.com'; 
 
 function App() {
   const [isAdmin, setIsAdmin] = useState(false);
@@ -17,7 +19,8 @@ function App() {
 
   const loadData = async () => {
     try {
-      const res = await fetch('http://localhost:5001/api/requests');
+      // ЗАМЕНЕНО: используем API_URL
+      const res = await fetch(`${API_URL}/api/requests`);
       const data = await res.json();
       setSavedObjects(data);
     } catch (e) { console.error("Ошибка загрузки", e); }
@@ -32,7 +35,8 @@ function App() {
 
   const sendToServer = async () => {
     const data = { type, description, coordinates: currentCoords };
-    await fetch('http://localhost:5001/api/requests', {
+    // ЗАМЕНЕНО: используем API_URL
+    await fetch(`${API_URL}/api/requests`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -43,7 +47,8 @@ function App() {
   };
 
   const handleVerify = async (id, status) => {
-    await fetch(`http://localhost:5001/api/requests/${id}`, {
+    // ЗАМЕНЕНО: используем API_URL
+    await fetch(`${API_URL}/api/requests/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status })
@@ -52,10 +57,12 @@ function App() {
   };
 
   const handleDelete = async (id) => {
-    await fetch(`http://localhost:5001/api/requests/${id}`, { method: 'DELETE' });
+    // ЗАМЕНЕНО: используем API_URL
+    await fetch(`${API_URL}/api/requests/${id}`, { method: 'DELETE' });
     loadData();
   };
 
+  // ... остальной код (return и т.д.) остается без изменений
   return (
     <div className="App">
       <header className="header">
