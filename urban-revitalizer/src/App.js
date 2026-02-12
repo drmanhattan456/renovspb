@@ -5,8 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import './App.css';
 
-const SPB_BOUNDS = [[59.4000, 29.5000], [60.5000, 31.5000]];
-// Создадим константу для адреса, чтобы менять в одном месте
+// Адрес твоего бэкенда на Render
 const API_URL = 'https://renovspb.onrender.com'; 
 
 function App() {
@@ -14,12 +13,11 @@ function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [savedObjects, setSavedObjects] = useState([]);
   const [currentCoords, setCurrentCoords] = useState(null);
-  const [type, setType] = useState('Заброшенная промзона');
+  const [type, setType] = useState('Заброшенная территория');
   const [description, setDescription] = useState('');
 
   const loadData = async () => {
     try {
-      // ЗАМЕНЕНО: используем API_URL
       const res = await fetch(`${API_URL}/api/requests`);
       const data = await res.json();
       setSavedObjects(data);
@@ -35,7 +33,6 @@ function App() {
 
   const sendToServer = async () => {
     const data = { type, description, coordinates: currentCoords };
-    // ЗАМЕНЕНО: используем API_URL
     await fetch(`${API_URL}/api/requests`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -47,7 +44,6 @@ function App() {
   };
 
   const handleVerify = async (id, status) => {
-    // ЗАМЕНЕНО: используем API_URL
     await fetch(`${API_URL}/api/requests/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -57,30 +53,27 @@ function App() {
   };
 
   const handleDelete = async (id) => {
-    // ЗАМЕНЕНО: используем API_URL
     await fetch(`${API_URL}/api/requests/${id}`, { method: 'DELETE' });
     loadData();
   };
 
-  // ... остальной код (return и т.д.) остается без изменений
   return (
     <div className="App">
       <header className="header">
         <div className="menu-icon" onClick={() => setIsAdmin(!isAdmin)}>
           {isAdmin ? "🔒 ADMIN" : "☰"}
         </div>
-        <div className="logo">SPB_RENOVATION</div>
+        <div className="logo">URBAN_REVITALIZER</div>
         {isAdmin && <div className="admin-badge">MODERATION MODE</div>}
       </header>
 
       <MapContainer 
-        center={[59.9311, 30.4500]} 
-        zoom={10} 
-        maxBounds={SPB_BOUNDS}
-        zoomControl={false}
+        center={[20, 0]} // Начальная точка (ближе к центру карты мира)
+        zoom={2}         // Отдаленный зум, чтобы видеть все страны
+        zoomControl={true} // Включаем кнопки зума для удобства
         style={{ height: "100%", width: "100%", background: "#fff" }}
       >
-        <TileLayer url="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png" />
+        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         
         {savedObjects.map((obj) => (
           <Polygon 
@@ -108,7 +101,14 @@ function App() {
             <EditControl
               position='topleft'
               onCreated={_onCreate}
-              draw={{ rectangle: false, circle: false, polyline: false, circlemarker: false, marker: false, polygon: { shapeOptions: { color: '#27ae60' } } }}
+              draw={{ 
+                rectangle: true, 
+                circle: false, 
+                polyline: false, 
+                circlemarker: false, 
+                marker: true, 
+                polygon: { shapeOptions: { color: '#27ae60' } } 
+              }}
             />
           </FeatureGroup>
         )}
@@ -122,8 +122,9 @@ function App() {
               <option>Заброшенная промзона</option>
               <option>Пустырь</option>
               <option>Недострой</option>
+              <option>Объект реновации</option>
             </select>
-            <textarea className="modal-input" placeholder="Ваше предложение..." value={description} onChange={(e) => setDescription(e.target.value)} />
+            <textarea className="modal-input" placeholder="Опишите потенциал места..." value={description} onChange={(e) => setDescription(e.target.value)} />
             <div className="modal-buttons">
               <button onClick={() => setIsModalOpen(false)}>Отмена</button>
               <button className="btn-send" onClick={sendToServer}>Отправить</button>
