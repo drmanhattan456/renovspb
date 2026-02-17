@@ -7,13 +7,13 @@ import './App.css';
 
 const API_URL = 'https://renovspb.onrender.com'; 
 
-// Доступные цвета
 const COLORS = [
   { name: 'Зеленый', value: '#2ecc71' },
   { name: 'Синий', value: '#3498db' },
   { name: 'Красный', value: '#e74c3c' },
   { name: 'Фиолетовый', value: '#9b59b6' },
-  { name: 'Оранжевый', value: '#f39c12' }
+  { name: 'Оранжевый', value: '#f39c12' },
+  //{ name: 'Чёрный'}
 ];
 
 function App() {
