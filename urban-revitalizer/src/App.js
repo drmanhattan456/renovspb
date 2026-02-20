@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, FeatureGroup, Polygon, Polyline, Marker, Popup } from 'react-leaflet';
 import { EditControl } from "react-leaflet-draw";
 import L from 'leaflet';
@@ -15,7 +15,6 @@ const busIcon = new L.Icon({
 const API_URL = 'https://renovspb.onrender.com'; 
 const BOROVICHI_CENTER = [58.3878, 33.9107]; 
 
-// Расширенный список цветов
 const COLORS = [
   { name: 'Зеленый', value: '#2ecc71' },
   { name: 'Синий', value: '#3498db' },
@@ -35,13 +34,18 @@ function App() {
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('zone'); 
   const [selectedColor, setSelectedColor] = useState(COLORS[0].value);
+  
+  // Реф для доступа к слою рисования
+  const editControlRef = useRef(null);
 
   const loadData = async () => {
     try {
       const res = await fetch(`${API_URL}/api/requests`);
       const data = await res.json();
-      setSavedObjects(Array.isArray(data) ? data : []);
-    } catch (e) { setSavedObjects([]); }
+      if (Array.isArray(data)) {
+        setSavedObjects(data);
+      }
+    } catch (e) { console.error("Ошибка загрузки данных", e); }
   };
 
   useEffect(() => { loadData(); }, []);
@@ -49,26 +53,42 @@ function App() {
   const _onCreated = (e) => {
     const { layerType, layer } = e;
     const coords = layerType === 'marker' ? layer.getLatLng() : layer.getLatLngs();
-    setCurrentLayer({ type: layerType, coords });
+    
+    setCurrentLayer({ type: layerType, coords, layer });
     setIsModalOpen(true);
   };
 
   const sendToServer = async () => {
+    if (!currentLayer) return;
+
     const data = { 
       category, 
       description, 
       coordinates: currentLayer.coords, 
       layerType: currentLayer.type,
-      color: selectedColor // Сохраняем выбранный цвет
+      color: selectedColor 
     };
-    await fetch(`${API_URL}/api/requests`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    setIsModalOpen(false);
-    setDescription('');
-    loadData();
+
+    try {
+      await fetch(`${API_URL}/api/requests`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+
+      // Удаляем временный слой, который создал EditControl, 
+      // чтобы он не мешал отображению данных из базы
+      if (currentLayer.layer) {
+        currentLayer.layer.remove();
+      }
+
+      setIsModalOpen(false);
+      setDescription('');
+      setCurrentLayer(null);
+      await loadData(); // Перезагружаем все объекты с сервера
+    } catch (e) {
+      alert("Ошибка при сохранении");
+    }
   };
 
   const deleteObject = async (id) => {
@@ -79,7 +99,7 @@ function App() {
   return (
     <div className="App" style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
       <header style={{ height: "50px", background: "#111", color: "#fff", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", zIndex: 1000 }}>
-        <b style={{ letterSpacing: "1px" }}>BOROVICHI URBAN DESIGN</b>
+        <b>BOROVICHI URBAN SYSTEM</b>
         <button onClick={() => setIsAdmin(!isAdmin)} style={{ background: "#333", color: "#fff", border: "1px solid #555", padding: "5px 12px", borderRadius: "4px" }}>
           {isAdmin ? "ВЫХОД" : "АДМИН"}
         </button>
@@ -90,11 +110,14 @@ function App() {
           <TileLayer url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}" attribution='&copy; Google Maps' />
           
           {savedObjects.map((obj) => {
-            if (!obj.coordinates) return null;
+            if (!obj.coordinates || !obj.id) return null;
+
+            // Используем obj.id в ключе, чтобы React не терял объекты
+            const commonKey = `obj-${obj.id}`;
 
             if (obj.layerType === 'polygon' || obj.layerType === 'rectangle') {
               return (
-                <Polygon key={obj.id} positions={obj.coordinates} pathOptions={{ color: obj.color || '#00ff00', fillOpacity: 0.15, weight: 3 }}>
+                <Polygon key={commonKey} positions={obj.coordinates} pathOptions={{ color: obj.color, fillOpacity: 0.15, weight: 3 }}>
                   <Popup>
                     {obj.description}
                     {isAdmin && <button onClick={() => deleteObject(obj.id)} style={{display:"block", color:"red", marginTop:"10px"}}>Удалить</button>}
@@ -106,12 +129,12 @@ function App() {
             if (obj.layerType === 'polyline') {
               const isTransport = obj.category === 'transport';
               return (
-                <React.Fragment key={obj.id}>
-                  <Polyline positions={obj.coordinates} pathOptions={{ color: obj.color || '#3498db', weight: 5 }}>
+                <React.Fragment key={commonKey}>
+                  <Polyline positions={obj.coordinates} pathOptions={{ color: obj.color, weight: 5 }}>
                     <Popup>{obj.description}</Popup>
                   </Polyline>
-                  {isTransport && obj.coordinates.map((pos, i) => (
-                    <Marker key={`${obj.id}-${i}`} position={pos} icon={busIcon} />
+                  {isTransport && Array.isArray(obj.coordinates) && obj.coordinates.map((pos, i) => (
+                    <Marker key={`${commonKey}-stop-${i}`} position={pos} icon={busIcon} />
                   ))}
                 </React.Fragment>
               );
@@ -119,7 +142,7 @@ function App() {
 
             if (obj.layerType === 'marker') {
               return (
-                <Marker key={obj.id} position={obj.coordinates} icon={busIcon}>
+                <Marker key={commonKey} position={obj.coordinates} icon={busIcon}>
                   <Popup>{obj.description}</Popup>
                 </Marker>
               );
@@ -132,8 +155,8 @@ function App() {
               position='topleft'
               onCreated={_onCreated}
               draw={{
-                polygon: { shapeOptions: { color: selectedColor, fillOpacity: 0.15 } },
-                rectangle: { shapeOptions: { color: selectedColor, fillOpacity: 0.15 } },
+                polygon: { shapeOptions: { color: selectedColor, fillOpacity: 0.2 } },
+                rectangle: { shapeOptions: { color: selectedColor, fillOpacity: 0.2 } },
                 polyline: { shapeOptions: { color: selectedColor, weight: 5 } },
                 circle: false, circlemarker: false, marker: true
               }}
@@ -147,33 +170,35 @@ function App() {
           <div style={{ background: "#fff", padding: "20px", borderRadius: "12px", width: "320px", color: "#333" }}>
             <h3 style={{ marginTop: 0 }}>Настройка объекта</h3>
             
-            <label style={{ fontSize: "12px", fontWeight: "bold" }}>КАТЕГОРИЯ:</label>
+            <label style={{ fontSize: "11px", fontWeight: "bold" }}>КАТЕГОРИЯ:</label>
             <select style={{ width: "100%", padding: "8px", margin: "5px 0 15px 0" }} value={category} onChange={(e) => setCategory(e.target.value)}>
               <option value="zone">Территория</option>
-              <option value="transport">Транспорт (с остановками)</option>
-              <option value="road">Дорога / Путь</option>
+              <option value="transport">Транспорт (+ остановки)</option>
+              <option value="road">Дорога</option>
             </select>
 
-            <label style={{ fontSize: "12px", fontWeight: "bold" }}>ЦВЕТ ВЫДЕЛЕНИЯ:</label>
+            <label style={{ fontSize: "11px", fontWeight: "bold" }}>ЦВЕТ:</label>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", margin: "10px 0 20px 0" }}>
               {COLORS.map(c => (
                 <div 
                   key={c.value} 
                   onClick={() => setSelectedColor(c.value)} 
                   style={{ 
-                    width: "28px", height: "28px", borderRadius: "50%", 
+                    width: "30px", height: "30px", borderRadius: "50%", 
                     backgroundColor: c.value, cursor: "pointer", 
                     border: selectedColor === c.value ? "3px solid #000" : "1px solid #ddd" 
                   }} 
-                  title={c.name}
                 />
               ))}
             </div>
 
-            <textarea style={{ width: "100%", height: "70px", padding: "8px", boxSizing: "border-box", borderRadius: "5px" }} placeholder="Описание объекта..." value={description} onChange={(e) => setDescription(e.target.value)} />
+            <textarea style={{ width: "100%", height: "70px", padding: "8px", boxSizing: "border-box", borderRadius: "5px" }} placeholder="Описание..." value={description} onChange={(e) => setDescription(e.target.value)} />
             
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: "20px" }}>
-              <button onClick={() => setIsModalOpen(false)} style={{ padding: "8px 15px", borderRadius: "5px", border: "1px solid #ccc", background: "none" }}>ОТМЕНА</button>
+              <button onClick={() => {
+                if (currentLayer && currentLayer.layer) currentLayer.layer.remove();
+                setIsModalOpen(false);
+              }} style={{ padding: "8px 15px", borderRadius: "5px" }}>ОТМЕНА</button>
               <button onClick={sendToServer} style={{ background: "#27ae60", color: "#fff", border: "none", padding: "8px 20px", borderRadius: "5px", fontWeight: "bold" }}>СОХРАНИТЬ</button>
             </div>
           </div>
@@ -183,4 +208,4 @@ function App() {
   );
 }
 
-export default App;
+export default App; 
