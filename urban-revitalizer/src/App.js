@@ -15,7 +15,7 @@ const busIcon = new L.Icon({
 });
 
 const API_URL = 'https://renovspb.onrender.com'; 
-const BOROVICHI_CENTER = [58.3878, 33.9107]; // Координаты г. Боровичи
+const BOROVICHI_CENTER = [58.3878, 33.9107]; 
 
 function App() {
   const [isAdmin, setIsAdmin] = useState(false);
@@ -39,7 +39,6 @@ function App() {
     const { layerType, layer } = e;
     const coords = layerType === 'marker' ? layer.getLatLng() : layer.getLatLngs();
     
-    // Автоматическая подстановка категории
     if (layerType === 'marker') setCategory('transport');
     else if (layerType === 'polyline') setCategory('road');
     else setCategory('zone');
@@ -73,29 +72,33 @@ function App() {
 
   return (
     <div className="App" style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
-      <header className="header" style={{ height: "60px", padding: "0 20px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "#fff", zIndex: 1000, boxShadow: "0 2px 5px rgba(0,0,0,0.1)" }}>
-        <div className="logo" style={{ fontWeight: "bold", color: "#2c3e50" }}>BOROVICHI_PLANNER</div>
+      <header className="header" style={{ height: "60px", padding: "0 20px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "#1a1a1a", color: "#fff", zIndex: 1000 }}>
+        <div className="logo" style={{ fontWeight: "bold" }}>BOROVICHI_SATELLITE</div>
         <button 
           onClick={() => setIsAdmin(!isAdmin)}
-          style={{ padding: "8px 15px", cursor: "pointer", borderRadius: "5px", border: "1px solid #ccc" }}
+          style={{ padding: "8px 15px", cursor: "pointer", background: isAdmin ? "#e74c3c" : "#3498db", color: "#fff", border: "none", borderRadius: "5px" }}
         >
-          {isAdmin ? "🔒 Выйти" : "👤 Админ"}
+          {isAdmin ? "ВЫЙТИ" : "АДМИН"}
         </button>
       </header>
 
       <div style={{ flex: 1, position: "relative" }}>
-        <MapContainer center={BOROVICHI_CENTER} zoom={13} style={{ height: "100%", width: "100%" }}>
-          {/* ЦВЕТНАЯ ГЕОГРАФИЧЕСКАЯ КАРТА */}
+        <MapContainer center={BOROVICHI_CENTER} zoom={14} style={{ height: "100%", width: "100%" }}>
+          {/* СПУТНИКОВЫЙ СЛОЙ (ESRI World Imagery) */}
           <TileLayer 
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
-            attribution='&copy; OpenStreetMap contributors'
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
+            attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EBP, and the GIS User Community'
+          />
+          {/* Слой с названиями улиц поверх спутника (опционально) */}
+          <TileLayer 
+            url="https://stamen-tiles-{s}.a.ssl.fastly.net/toner-labels/{z}/{x}/{y}{r}.png" 
+            opacity={0.7}
           />
           
           {savedObjects.map((obj) => {
-            // ЗОНЫ (Полигоны) - Прозрачность 0.15
             if (obj.layerType === 'polygon' || obj.layerType === 'rectangle') {
               return (
-                <Polygon key={obj.id} positions={obj.coordinates} pathOptions={{ color: '#e67e22', fillOpacity: 0.15 }}>
+                <Polygon key={obj.id} positions={obj.coordinates} pathOptions={{ color: '#00ff00', fillOpacity: 0.1, weight: 2 }}>
                   <Popup>
                     <strong>Зона:</strong> {obj.description}
                     {isAdmin && <button onClick={() => deleteObject(obj.id)} style={{display: 'block', marginTop: '10px', color: 'red'}}>Удалить</button>}
@@ -103,13 +106,12 @@ function App() {
                 </Polygon>
               );
             }
-            // ЛИНИИ (Дороги и Транспорт)
             if (obj.layerType === 'polyline') {
               return (
                 <Polyline 
                   key={obj.id} 
                   positions={obj.coordinates} 
-                  pathOptions={{ color: obj.category === 'transport' ? '#2980b9' : '#7f8c8d', weight: 5 }}
+                  pathOptions={{ color: obj.category === 'transport' ? '#3498db' : '#ffffff', weight: 4, dashArray: obj.category === 'road' ? '10, 10' : '' }}
                 >
                   <Popup>
                     <strong>{obj.category === 'transport' ? 'Маршрут' : 'Дорога'}:</strong> {obj.description}
@@ -118,7 +120,6 @@ function App() {
                 </Polyline>
               );
             }
-            // ОСТАНОВКИ (Маркеры)
             if (obj.layerType === 'marker') {
               return (
                 <Marker key={obj.id} position={obj.coordinates} icon={busIcon}>
@@ -137,9 +138,9 @@ function App() {
               position='topleft'
               onCreated={_onCreated}
               draw={{
-                polygon: { shapeOptions: { color: '#e67e22', fillOpacity: 0.15 } },
-                rectangle: { shapeOptions: { color: '#e67e22', fillOpacity: 0.15 } },
-                polyline: { shapeOptions: { color: '#2980b9', weight: 4 } },
+                polygon: { shapeOptions: { color: '#00ff00', fillOpacity: 0.1 } },
+                rectangle: { shapeOptions: { color: '#00ff00', fillOpacity: 0.1 } },
+                polyline: { shapeOptions: { color: '#3498db', weight: 4 } },
                 marker: true,
                 circle: false,
                 circlemarker: false
@@ -150,32 +151,18 @@ function App() {
       </div>
 
       {isModalOpen && (
-        <div className="modal-overlay" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000 }}>
-          <div className="modal-content" style={{ background: "#fff", padding: "25px", borderRadius: "12px", width: "320px", boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }}>
-            <h3 style={{ marginTop: 0 }}>Параметры объекта</h3>
-            
-            <label style={{ fontSize: "13px", color: "#666" }}>Категория:</label>
-            <select 
-              style={{ width: "100%", padding: "8px", margin: "10px 0 20px 0", borderRadius: "5px" }} 
-              value={category} 
-              onChange={(e) => setCategory(e.target.value)}
-            >
-              <option value="zone">Территория (Оранжевый)</option>
-              <option value="transport">Транспорт / Остановка (Синий)</option>
-              <option value="road">Дорога (Серый)</option>
+        <div className="modal-overlay" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000 }}>
+          <div className="modal-content" style={{ background: "#fff", padding: "20px", borderRadius: "8px", width: "300px" }}>
+            <h3 style={{ marginTop: 0 }}>Новый объект</h3>
+            <select style={{ width: "100%", padding: "8px", marginBottom: "15px" }} value={category} onChange={(e) => setCategory(e.target.value)}>
+              <option value="zone">Территория (Зеленый)</option>
+              <option value="transport">Транспорт (Синий)</option>
+              <option value="road">Дорога (Белый)</option>
             </select>
-
-            <label style={{ fontSize: "13px", color: "#666" }}>Описание:</label>
-            <textarea 
-              style={{ width: "100%", height: "80px", padding: "8px", boxSizing: "border-box", borderRadius: "5px", border: "1px solid #ccc" }} 
-              placeholder="Введите информацию об объекте..." 
-              value={description} 
-              onChange={(e) => setDescription(e.target.value)} 
-            />
-            
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "20px" }}>
-              <button onClick={() => setIsModalOpen(false)} style={{ padding: "8px 20px", borderRadius: "5px", border: "1px solid #ccc", background: "none" }}>Отмена</button>
-              <button onClick={sendToServer} style={{ padding: "8px 20px", borderRadius: "5px", border: "none", background: "#27ae60", color: "#fff", fontWeight: "bold" }}>Сохранить</button>
+            <textarea style={{ width: "100%", height: "80px", padding: "8px", boxSizing: "border-box" }} placeholder="Описание..." value={description} onChange={(e) => setDescription(e.target.value)} />
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "15px" }}>
+              <button onClick={() => setIsModalOpen(false)}>Отмена</button>
+              <button onClick={sendToServer} style={{ background: "#27ae60", color: "#fff", border: "none", padding: "8px 15px", borderRadius: "4px", cursor: "pointer" }}>Сохранить</button>
             </div>
           </div>
         </div>
